@@ -292,4 +292,38 @@ mainServer <- function(input, output, session, data_reactive, selected_dir_react
                           sprintf("%s [%s]", input$col_value, input$unit_input),
                           input$ref_low, input$ref_high)
   })
+  
+  # Download handler for the main analysis report
+  output$download_main_report <- downloadHandler(
+    filename = function() {
+      paste0("RefineR_Main_Report_", format(Sys.time(), "%Y%m%d_%H%M%S"), ".pdf")
+    },
+    content = function(file) {
+      model <- refiner_model_rv()
+      if (is.null(model)) {
+        # Create an empty PDF with a message if no model is available
+        pdf(file, width = 11, height = 8.5)
+        plot.new()
+        text(0.5, 0.5, "No analysis has been run. Please run the analysis first.", cex = 1.2)
+        dev.off()
+        return()
+      }
+      
+      # Start PDF device
+      pdf(file, width = 11, height = 8.5)
+      
+      # 1. Add the plot
+      generate_refiner_plot(model, plot_title_rv(),
+                            sprintf("%s [%s]", input$col_value, input$unit_input),
+                            input$ref_low, input$ref_high)
+      
+      # 2. Add the summary text on a new page
+      plot.new()
+      summary_text <- capture.output(print(model))
+      grid::grid.text(paste(summary_text, collapse = "\n"), x = 0.05, y = 0.95, just = c("left", "top"), gp = grid::gpar(fontfamily = "Courier"))
+      
+      # Close the PDF device
+      dev.off()
+    }
+  )
 }
