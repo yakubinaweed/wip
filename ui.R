@@ -104,7 +104,8 @@ ui <- navbarPage(
         hr(),
         numericInput("ref_low", "Reference Lower Limit:", value = NA),
         numericInput("ref_high", "Reference Upper Limit:", value = NA),
-        textInput(inputId = "unit_input", label = "Unit of Measurement", value = "mmol/L", placeholder = "ex. g/L")
+        textInput(inputId = "unit_input", label = "Unit of Measurement:", value = "mmol/L", placeholder = "ex. g/L"),
+        textInput(inputId = "y_axis_label", label = "Y-Axis Label:", value = "Frequency", placeholder = "e.g., Count")
       ),
       mainPanel(
         plotOutput("result_plot"),

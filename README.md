@@ -47,7 +47,7 @@ We've integrated cutting-edge methods to ensure you get the most reliable result
     ```R
     install.packages(c(
       "shiny", "refineR", "readxl", "tidyverse", "mclust", "moments", "shinyjs", "car",
-      "shinyFiles", "shinyWidgets", "bslib", "ggplot2", "future", "future.apply", "bsicons", "remotes"
+      "shinyFiles", "shinyWidgets", "bslib", "ggplot2", "future", "future.apply", "bsicons", "remotes", "gridGraphics"
     ))
     ```
 

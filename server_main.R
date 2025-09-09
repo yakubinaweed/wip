@@ -1,5 +1,7 @@
 # server_main.R
 # This module contains the logic for the "Main Analysis" tab.
+library(grid)
+library(gridGraphics)
 
 # =========================================================================
 # UTILITY FUNCTIONS FOR MAIN ANALYSIS
@@ -46,11 +48,12 @@ generate_safe_filename <- function(plot_title, base_path, extension = "png") {
 }
 
 # Generates the refineR plot with optional manual reference limits
-generate_refiner_plot <- function(model, title, xlab, ref_low, ref_high) {
+generate_refiner_plot <- function(model, title, xlab, ylab, ref_low, ref_high) {
   req(model)
   plot(model, showCI = TRUE, RIperc = c(0.025, 0.975), showPathol = FALSE,
        title = title,
-       xlab = xlab)
+       xlab = xlab,
+       ylab = ylab)
 
   usr <- par("usr")
   y_max <- usr[4]
@@ -245,6 +248,7 @@ mainServer <- function(input, output, session, data_reactive, selected_dir_react
 
         generate_refiner_plot(refiner_model, plot_title_rv(),
                               sprintf("%s [%s]", isolate(input$col_value), isolate(input$unit_input)),
+                              isolate(input$y_axis_label),
                               isolate(input$ref_low), isolate(input$ref_high))
 
         dev.off()
@@ -290,10 +294,11 @@ mainServer <- function(input, output, session, data_reactive, selected_dir_react
 
     generate_refiner_plot(refiner_model, plot_title,
                           sprintf("%s [%s]", input$col_value, input$unit_input),
+                          input$y_axis_label,
                           input$ref_low, input$ref_high)
   })
   
-  # Download handler for the main analysis report
+  # Download handler for the main analysis report (A4 formatted)
   output$download_main_report <- downloadHandler(
     filename = function() {
       paste0("RefineR_Main_Report_", format(Sys.time(), "%Y%m%d_%H%M%S"), ".pdf")
@@ -301,26 +306,71 @@ mainServer <- function(input, output, session, data_reactive, selected_dir_react
     content = function(file) {
       model <- refiner_model_rv()
       if (is.null(model)) {
-        # Create an empty PDF with a message if no model is available
-        pdf(file, width = 11, height = 8.5)
+        pdf(file, width = 8.27, height = 11.69, paper = "a4")
         plot.new()
         text(0.5, 0.5, "No analysis has been run. Please run the analysis first.", cex = 1.2)
         dev.off()
         return()
       }
       
-      # Start PDF device
-      pdf(file, width = 11, height = 8.5)
+      # Start PDF device with A4 dimensions
+      pdf(file, width = 8.27, height = 11.69, paper = "a4")
       
-      # 1. Add the plot
+      # 1. Generate the plot and capture it as a grid object
       generate_refiner_plot(model, plot_title_rv(),
                             sprintf("%s [%s]", input$col_value, input$unit_input),
+                            input$y_axis_label,
                             input$ref_low, input$ref_high)
+      plot_grob <- grid.grab()
       
-      # 2. Add the summary text on a new page
-      plot.new()
-      summary_text <- capture.output(print(model))
-      grid::grid.text(paste(summary_text, collapse = "\n"), x = 0.05, y = 0.95, just = c("left", "top"), gp = grid::gpar(fontfamily = "Courier"))
+      # 2. Set up the layout on a new page
+      grid.newpage()
+      pushViewport(viewport(layout = grid.layout(4, 1, heights = unit(c(0.1, 0.5, 0.1, 0.3), "npc"))))
+      
+      # 3. Report Title
+      grid.text("RefineR Analysis Report", vp = viewport(layout.pos.row = 1, layout.pos.col = 1), gp = gpar(fontsize = 20, fontface = "bold"))
+      
+      # 4. Draw the captured plot into the second row of the layout
+      pushViewport(viewport(layout.pos.row = 2, layout.pos.col = 1))
+      grid.draw(plot_grob)
+      popViewport()
+      
+      # 5. Summary Title
+      grid.text("Analysis Summary", vp = viewport(layout.pos.row = 3, layout.pos.col = 1), gp = gpar(fontsize = 16, fontface = "bold"))
+      
+      # 6. Formatted Summary Text
+      format_summary <- function(model) {
+        ri_data <- getRI(model, RIperc = c(0.025, 0.975), pointEst = "medianBS")
+        
+        lower_ri <- sprintf("%.2f (95%% CI: %.2f to %.2f)", ri_data$PointEst[1], ri_data$CILow[1], ri_data$CIHigh[1])
+        upper_ri <- sprintf("%.2f (95%% CI: %.2f to %.2f)", ri_data$PointEst[2], ri_data$CILow[2], ri_data$CIHigh[2])
+        
+        params <- model$model$parameters
+        
+        # Defensively check if params are numeric before rounding
+        lambda_val <- if(is.numeric(params$lambda)) round(params$lambda, 3) else "N/A"
+        mu_val <- if(is.numeric(params$mu)) round(params$mu, 3) else "N/A"
+        sigma_val <- if(is.numeric(params$sigma)) round(params$sigma, 3) else "N/A"
+        shift_val <- if(!is.null(params$shift) && is.numeric(params$shift)) round(params$shift, 3) else "N/A"
+
+        summary_lines <- c(
+          "Reference Intervals:",
+          paste("  Lower Limit (2.5%):", lower_ri),
+          paste("  Upper Limit (97.5%):", upper_ri),
+          "",
+          "Model Parameters:",
+          paste("  Transformation Model:", model$model$partrans$model),
+          paste("  Sample Size (N):", length(model$data$orig)),
+          paste("  Lambda:", lambda_val),
+          paste("  Mu:", mu_val),
+          paste("  Sigma:", sigma_val),
+          paste("  Shift:", shift_val)
+        )
+        paste(summary_lines, collapse = "\n")
+      }
+      
+      summary_text <- format_summary(model)
+      grid.text(summary_text, vp = viewport(layout.pos.row = 4, layout.pos.col = 1), x = 0.05, just = "left", gp = gpar(fontfamily = "Courier", fontsize = 10))
       
       # Close the PDF device
       dev.off()
